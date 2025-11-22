@@ -132,7 +132,7 @@ def get_users(browser, school_id, ui, database, login, parol):
     for i in database.dict_data["all_data_logins"].keys():
         if i in natija:
             natija[i]["login"] = database.dict_data["all_data_logins"][i]["login"]
-            natija[i]["parol"] = database.dict_data["all_data_logins"][i]["login"]
+            natija[i]["parol"] = database.dict_data["all_data_logins"][i]["parol"]
     
     ui.label_3.setText("Sinflari aniqlanmoqda ...")
     for grade in all_classes.keys():
@@ -167,7 +167,6 @@ def get_users(browser, school_id, ui, database, login, parol):
                     pass
     database.dict_data["all_data_logins"] = natija
     database.dict_data["profile_kundalikcom"] = {"login": login, "parol": parol, "maktab_id": school_id,  "all_classes": get_all_group(browser, school_id), "mal": database.dict_data["profile_kundalikcom"]["mal"]}
-    database.refresh()
     ui.pushButton.setStyleSheet("""QPushButton{
         background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0.409, stop:0 rgba(255, 241, 0), stop:0.517241 rgba(74, 255, 0), stop:1 rgba(0, 232, 255));
         color: black;

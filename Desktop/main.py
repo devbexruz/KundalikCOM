@@ -25,6 +25,12 @@ from ui_pyfiles.login import Ui_Frame as Ui_LoginFrame
 from ui_pyfiles.refresh_logins_data import Ui_Frame as Ui_KundalikRefreshFrame
 from ui_pyfiles.kundalik_login import Ui_Frame as Ui_KundalikLoginFrame
 from ui_pyfiles.buy_dialog import Ui_Frame as Ui_BuyDialogFrame
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtGui import QIcon, QPixmap
+from datetime import datetime
+
+
+# Qo'shimcha
 from functools import partial
 from threading import Thread
 import webbrowser
@@ -115,7 +121,7 @@ icon4.addPixmap(QtGui.QPixmap("icons/edit.png"), QtGui.QIcon.Normal, QtGui.QIcon
 
 def AsosiyMenyuniOchish():
     profile_data = database.get_profile()
-    if profile_data["sex"]:
+    if profile_data["sex"] or profile_data["sex"] is None:
         icon1 = QtGui.QIcon()
         icon1.addPixmap(QtGui.QPixmap("icons/man.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         ui.hisob_button.setIcon(icon1)
@@ -141,7 +147,7 @@ def AsosiyMenyuniOchish():
     ui.label_26.setText(f"{end_date.day}.{end_date.month}.{end_date.year}")
 
     if mal["size"] <= 0:
-        ui.stackedWidget.setCurrentIndex(1)
+        ui.stackedWidget.setCurrentIndex(0)
         ui.pushButton_6.setEnabled(False)
         ui.admins_button.setEnabled(False)
         msg = QtWidgets.QMessageBox(MainWindow)
@@ -156,6 +162,7 @@ def AsosiyMenyuniOchish():
         ui.label_27.setStyleSheet("color: red")
         ui.label_31.setText("Tugagan")
         ui.label_27.setText("Tugagan")
+        ui.stackedWidget.setCurrentIndex(0)
     else:
         ui.pushButton_6.setEnabled(True)
         ui.admins_button.setEnabled(True)
@@ -311,6 +318,7 @@ def AsosiyMenyuniOchish():
 
 # QThread orqali Ma'lumotlarni olish
 class LoginsAddThreadClass(QtCore.QThread):
+    db_refresh = pyqtSignal()
     def __init__(self, ui, database, loading, loading_quit):
         super().__init__()
         self.ui = ui
@@ -334,7 +342,7 @@ class LoginsAddThreadClass(QtCore.QThread):
             i+=1
             loading_label.setText(f"Barcha yangi login parollarni tekshirib chiqish\n{i}/{n}")
         if n:
-            self.database.refresh()
+            self.db_refresh.emit()
         self.loading_quit()
 
 
@@ -522,8 +530,22 @@ def logout():
     LoginFrame.show()
 
 
+
+# Get users workekr
+class GetUsersWorker(QThread):
+    end = pyqtSignal()
+    def __init__(self, maktab_id, login, parol):
+        super().__init__()
+        self.maktab_id = maktab_id
+        self.login = login
+        self.parol = parol
+    def run(self):
+        kundalikcom_func.get_users(database.browser, self.maktab_id, refresh_kundalik_ui, database, self.login, self.parol)
+        self.end.emit()
+
 # KundalikCOM akkountni kiritish administrator
 def kundalik_login_func():
+    global worker_get_users
     login = kundalik_login_ui.lineEdit.text().strip()
     parol = kundalik_login_ui.lineEdit_2.text().strip()
     how, data = database.login_kundalik(login, parol)
@@ -534,7 +556,10 @@ def kundalik_login_func():
         kundalik_login_ui.lineEdit_2.clear()
         refresh_kundalik_ui.label.setText(data["maktab_nomi"])
         ui.maktab_nomi.setText(data["maktab_nomi"])
-        Thread(target=kundalikcom_func.get_users, args=[database.browser, data["maktab_id"], refresh_kundalik_ui, database, login, parol]).start()
+        # Thread(target=kundalikcom_func.get_users, args=[database.browser, data["maktab_id"], refresh_kundalik_ui, database, login, parol]).start()
+        worker_get_users = GetUsersWorker(data["maktab_id"], login, parol)
+        worker_get_users.end.connect(database.refresh)
+        worker_get_users.start()
         RefreshKundalikFrame.exec_()
     elif data == None:
         msg = QtWidgets.QMessageBox(MainWindow)
@@ -703,6 +728,101 @@ def set_page_buttons(data):
                 pages_buttons[f"p{i}"].setText(f"{page-4+i}")
                 pages_buttons[f"p{i}"].setStyleSheet("")
 
+class OneLoginThread(QThread):
+    # Signal to update icon
+    update_icon = pyqtSignal(QIcon)
+    # Signal to show messages
+    show_message = pyqtSignal(str)
+
+    def __init__(self, user_id, tugma, database):
+        super().__init__()
+        self.user_id = user_id
+        self.tugma = tugma
+        self.database = database
+
+    def run(self):
+        # Initial icon
+        icon6 = QIcon()
+        icon6.addPixmap(QPixmap("icons/main-icon.png"), QIcon.Normal, QIcon.Off)
+        self.update_icon.emit(icon6)  # Set the initial icon for the button
+        
+        user = self.database.get_user(self.user_id)
+
+        # Check login and password validity
+        if user["login"] is None or user["parol"] is None:
+            icon6 = QIcon()
+            icon6.addPixmap(QPixmap("icons/play.png"), QIcon.Normal, QIcon.Off)
+            self.update_icon.emit(icon6)
+            self.show_message.emit("❌ Active qilinmadi\nLogin yoki parol kiritilmagan")
+        
+        elif self.database.login_user(self.user_id):
+            if "end_date" in user and datetime.now().strftime("%Y-%m-%d") == user["end_date"].strftime("%Y-%m-%d"):
+                icon6 = QIcon()
+                icon6.addPixmap(QPixmap("icons/refresh.png"), QIcon.Normal, QIcon.Off)
+            else:
+                icon6 = QIcon()
+                icon6.addPixmap(QPixmap("icons/play.png"), QIcon.Normal, QIcon.Off)
+            self.update_icon.emit(icon6)
+        else:
+            user = self.database.get_user(self.user_id)
+            if "end_date" in user and datetime.now().strftime("%Y-%m-%d") == user["end_date"].strftime("%Y-%m-%d"):
+                icon6 = QIcon()
+                icon6.addPixmap(QPixmap("icons/refresh.png"), QIcon.Normal, QIcon.Off)
+            else:
+                icon6 = QIcon()
+                icon6.addPixmap(QPixmap("icons/play.png"), QIcon.Normal, QIcon.Off)
+            self.update_icon.emit(icon6)
+            self.show_message.emit("❌ Active qilinmadi\nInternet sust yoki parol xato bo'lishi mumkin")
+def one_user_login(user_id, tugma):
+    # QThreadni yaratamiz
+    login_thread = OneLoginThread(user_id, tugma, database)
+    
+    # Signalni tugmaga ulaymiz
+    # login_thread.update_icon.connect(tugma.setIcon)
+    
+    # Signalni xabarlarni ko'rsatish uchun ulaymiz
+    # login_thread.show_message.connect(show_message)
+    
+    # Threadni ishga tushuramiz
+    login_thread.start()
+
+# def one_user_login(user_id, tugma):
+#     # tugma.clicked.disconnect()
+#     user = database.get_user(user_id)
+#     icon6 = QtGui.QIcon()
+#     icon6.addPixmap(QtGui.QPixmap("icons/main-icon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+#     tugma.setIcon(icon6)
+    
+#     if user["login"] == None or user["parol"] == None:
+        
+#         icon6 = QtGui.QIcon()
+#         icon6.addPixmap(QtGui.QPixmap("icons/play.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+#         tugma.setIcon(icon6)
+#         show_message("❌ Active qilinmadi\nLogin yoki parol kiritilmagan")
+        
+#     elif database.login_user(user_id):
+#         if "end_date" in  user and datetime.now().strftime("%Y-%m-%d") == user["end_date"].strftime("%Y-%m-%d"):
+#             icon6 = QtGui.QIcon()
+#             icon6.addPixmap(QtGui.QPixmap("icons/refresh.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+#         else:
+#             icon6 = QtGui.QIcon()
+#             icon6.addPixmap(QtGui.QPixmap("icons/play.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+#         tugma.setIcon(icon6)
+#     else:
+        
+#         icon6 = QtGui.QIcon()
+#         icon6.addPixmap(QtGui.QPixmap("icons/play.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+#         tugma.setIcon(icon6)
+#         show_message("❌ Active qilinmadi\nlogin yoki parol xato bo'lishi mumkin")
+
+# Parolni ko'rsatib yashirish uchun
+def password_toggle(lineEdit, button):
+    if button.text() == "ko'rsatish":
+        lineEdit.setEchoMode(QtWidgets.QLineEdit.Normal)
+        button.setText("yashirish")
+    else:
+        lineEdit.setEchoMode(QtWidgets.QLineEdit.Password)
+        button.setText("ko'rsatish")
 
 def add_user(data):
     ui.frame = QtWidgets.QFrame(ui.frame_6)
@@ -718,6 +838,49 @@ def add_user(data):
     ui.horizontalLayout_4 = QtWidgets.QHBoxLayout(ui.frame)
     ui.horizontalLayout_4.setContentsMargins(0, 0, 0, 0)
     ui.horizontalLayout_4.setObjectName("horizontalLayout_4")
+    user = database.get_user(data["id"])
+    if "end_date" in  user and datetime.now().strftime("%Y-%m-%d") == user["end_date"].strftime("%Y-%m-%d"):
+        icon6 = QtGui.QIcon()
+        icon6.addPixmap(QtGui.QPixmap("icons/refresh.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+    else:
+        icon6 = QtGui.QIcon()
+        icon6.addPixmap(QtGui.QPixmap("icons/play.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+
+    ui.pushButton_4 = QtWidgets.QPushButton(ui.frame)
+    sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Minimum)
+    sizePolicy.setHorizontalStretch(0)
+    sizePolicy.setVerticalStretch(0)
+    sizePolicy.setHeightForWidth(ui.pushButton_4.sizePolicy().hasHeightForWidth())
+    ui.pushButton_4.setSizePolicy(sizePolicy)
+    ui.pushButton_4.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+    ui.pushButton_4.setStyleSheet("QPushButton{\n"
+"border-radius: 5px;\n"
+"padding: 10px\n"
+"}\n"
+"QPushButton:pressed{\n"
+"    background-color: rgb(20, 100, 100);\n"
+"color: rgb(0,255,0);\n"
+"}")
+    ui.pushButton_4.setText("")
+    ui.pushButton_4.setIcon(icon6)
+    ui.pushButton_4.setObjectName("pushButton_4")
+    ui.horizontalLayout_4.addWidget(ui.pushButton_4)
+
+    # commanda ulash active qilish uchun
+    
+    # QThreadni yaratamiz
+    ui.login_thread = OneLoginThread(data['id'], ui.pushButton_4, database)
+    
+    # Signalni tugmaga ulaymiz
+    ui.login_thread.update_icon.connect(ui.pushButton_4.setIcon)
+    
+    # Signalni xabarlarni ko'rsatish uchun ulaymiz
+    ui.login_thread.show_message.connect(show_message)
+    
+    # Threadni ishga tushuramiz
+    # login_thread.start()
+    ui.pushButton_4.clicked.connect(partial(ui.login_thread.start))
+
     ui.label_75 = QtWidgets.QLabel(ui.frame)
     ui.label_75.setObjectName("label_75")
     ui.horizontalLayout_4.addWidget(ui.label_75)
@@ -796,7 +959,10 @@ def get_page(button):
 def all_data_refresh_maktab():
     refresh_kundalik_ui.label.setText(data["maktab_nomi"])
     login, parol = database.get_kundalik_profile()["login"], database.get_kundalik_profile()["parol"]
-    Thread(target=kundalikcom_func.get_users, args=[database.browser, database.get_kundalik_profile()["maktab_id"], refresh_kundalik_ui, database, login, parol]).start()
+    # Thread(target=kundalikcom_func.get_users, args=[database.browser, database.get_kundalik_profile()["maktab_id"], refresh_kundalik_ui, database, login, parol]).start()
+    worker_get_users = GetUsersWorker(database.get_kundalik_profile()["maktab_id"], login, parol)
+    worker_get_users.end.connect(database.refresh)
+    worker_get_users.start()
     RefreshKundalikFrame.exec_()
 
 
@@ -861,6 +1027,7 @@ def edit_page_active(user_id, sex, kimligi, label):
     else:
         edit_ui.label_52.setPixmap(QtGui.QPixmap("icons/woman.png"))
     edit_ui.lineEdit_21.setText(user["full_name"])
+    # print(user)
     if user["login"] != None:
         edit_ui.lineEdit_20.setText(user["login"])
     if user["parol"] != None:
@@ -915,7 +1082,7 @@ def login_va_parol_tekshirish(user_id, label):
             background-color: rgb(0,20,20);
         }""")
     if how:
-        if user_id == data:
+        if user_id == data["user_id"]:
             if edit_ui.checkBox.isChecked():
                 login_va_parol_saqlash(user_id, label)
             edit_ui.pushButton_13.setStyleSheet("""border-radius: 10px;
@@ -959,7 +1126,30 @@ def login_va_parol_tekshirish(user_id, label):
 def login_va_parol_saqlash(user_id, label):
     login = edit_ui.lineEdit_20.text().strip()
     parol = edit_ui.lineEdit_19.text().strip()
-    if login == "":
+    if login == "" or parol == "":
+        msg = QtWidgets.QMessageBox(EditFrame)
+        msg.setStyleSheet("border-radius: 5px; padding: 4px; color: blue; font-size: 20px;")
+        msg.setText("login yoki parol bo'sh bo'lishi mumkin emas")
+        msg.setInformativeText("Qatorlarni to'ldiring")
+        msg.setWindowTitle("❌ Saqlanmadi")
+        msg.exec_()
+        return
+    how, data = kundalikcom_func.login_user(requests.session(), login, parol)
+    if not how:
+        msg = QtWidgets.QMessageBox(EditFrame)
+        msg.setStyleSheet("border-radius: 5px; padding: 4px; color: blue; font-size: 20px;")
+        msg.setText(data)
+        msg.setInformativeText(" Qayta kiriting")
+        msg.setWindowTitle("❌ Saqlanmadi")
+        msg.exec_()
+    elif "user_id" in data and data["user_id"] != user_id:
+        msg = QtWidgets.QMessageBox(EditFrame)
+        msg.setStyleSheet("border-radius: 5px; padding: 4px; color: blue; font-size: 20px;")
+        msg.setText("Ushbu login parollar boshqa hisobga tegishli bo'lishi mumkin")
+        msg.setInformativeText("Qayta kiriting")
+        msg.setWindowTitle("❌ Moslik mavjud emas!")
+        msg.exec_()
+    elif login == "":
         msg = QtWidgets.QMessageBox(EditFrame)
         msg.setStyleSheet("border-radius: 5px; padding: 4px; color: blue; font-size: 20px;")
         msg.setIcon(QtWidgets.QMessageBox.Critical)
@@ -974,7 +1164,7 @@ def login_va_parol_saqlash(user_id, label):
         msg.setWindowTitle("Xatolik!")
         msg.exec_()
     else:
-        database.set_user(user_id, login, parol)
+        database.set_user(user_id, login=login, parol=parol)
         label.setStyleSheet("background-color: none; color: rgb(0,255,0);")
         label.setText("Parol kiritilgan")
         if edit_ui.checkBox_2.isChecked():
@@ -983,7 +1173,7 @@ def login_va_parol_saqlash(user_id, label):
 
 def refresh_maktabni_tugatish_func():
     RefreshKundalikFrame.close()
-    AsosiyMenyuniOchish()
+    # AsosiyMenyuniOchish()
 
 
 def set_today_func(value):
@@ -999,35 +1189,53 @@ def set_today_func(value):
             border-radius: 10px;
             background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0.409, stop:0 rgba(255, 15, 0, 255), stop:0.517241 rgba(226, 136, 5, 255), stop:1 rgba(255, 114, 0, 255));
             """)
+        ui.label_15.setText(f"{value}%")
     else:
         ui.frame_13.setStyleSheet("""
             font-size: 24px;
             border-radius: 10px;
             background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0.409, stop:0 rgba(255, 241, 0), stop:0.517241 rgba(74, 255, 0), stop:1 rgba(0, 232, 255));
             """)
+        ui.label_15.setText(f"{value}%")
 
 
 class RunThreadClass(QtCore.QThread):
     get = QtCore.pyqtSignal(int)
+    show_message = QtCore.pyqtSignal(str)
     def __init__(self, ui, database):
         super().__init__()
         self.ui = ui
         self.database = database
 
+
     def run(self):
         self.ui.pushButton_6.setEnabled(False)
+        self.ui.admins_button.setEnabled(False)
+        self.ui.admins_button_2.setEnabled(False)
+        self.ui.hisob_button.setEnabled(False)
+        # self.ui..setEnabled(False)
         all_data = database.get_logins()
-        n=0
+        n, p_num = 0, 0
         for user_id in all_data.keys():
             # print(user_id)
             if all_data[user_id]["login"] != None and all_data[user_id]["parol"] != None:
-                database.login_user(user_id)
+                how = database.login_user(user_id)
                 if how:
+                    # print(all_data[user_id])
                     n+=1
+                    self.ui.pushButton_6.setText(f"Jarayon ketmoqda ...\nActive: {n} / {len(all_data)}\nParoli xatolar: {p_num} ta")
                     self.get.emit(round((n*100)/len(all_data)))
+                else:
+                    p_num += 1
+                    self.ui.pushButton_6.setText(f"Jarayon ketmoqda ...\nActive: {n} / {len(all_data)}\nParoli xatolar: {p_num} ta")
         self.get.emit(round((n*100)/len(all_data)))
         self.ui.pushButton_6.setEnabled(True)
-
+        self.ui.pushButton_6.setText(f"BARCHA AKKOUNTLARNI\nLOGIN QILIB CHIQISH")
+        self.ui.admins_button.setEnabled(True)
+        self.ui.admins_button_2.setEnabled(True)
+        self.ui.hisob_button.setEnabled(True)
+        # Xabar QMessage chiqarish
+        self.show_message.emit(f"Ko'rsatkich: {round((n*100)/len(all_data))}%\n{n} ta foydalanuvchilar muvaffaqiyatli kiritildi\nParoli xatolar: {p_num} ta")
 
 def parol_kiritilmaganlar():
     loading()
@@ -1114,6 +1322,7 @@ def copy_inputs(lineEdit):
 RefreshKundalikFrame.closeEvent = get_users_thread_stop
 
 ui.login_check =  LoginsAddThreadClass(ui, database, loading, loading_quit)
+ui.login_check.db_refresh.connect(database.refresh)
 
 # tugmalarga ulash
 
@@ -1158,9 +1367,17 @@ ui.admins_button.clicked.connect(show_data_page)
 ui.threadclass = ThreadClass(ui, database, loading, loading_quit)
 ui.threadclass.get.connect(add_user)
 ui.threadclass.get2.connect(set_page_buttons)
-
+def show_message(message: str):
+    msg = QtWidgets.QMessageBox(MainWindow)
+    msg.setStyleSheet("border-radius: 5px; padding: 4px; color: blue; font-size: 20px;")
+    msg.setIcon(QtWidgets.QMessageBox.Information)
+    msg.setText(message)
+    msg.setWindowTitle("✅ Jarayon yakunlandi")
+    msg.exec_()
 ui.runThread = RunThreadClass(ui, database)
 ui.runThread.get.connect(set_today_func)
+ui.runThread.show_message.connect(show_message)
+
 ui.pushButton_6.clicked.connect(ui.runThread.start)
 
 # Comboboxlar changr bo'lganda
@@ -1171,8 +1388,10 @@ ui.comboBox.currentTextChanged.connect(changed_combobox)
 login_ui.lineEdit.returnPressed.connect(login_ui.lineEdit_2.setFocus)
 login_ui.lineEdit_2.returnPressed.connect(get_login_code)
 login_ui.lineEdit_3.returnPressed.connect(login_func)
+login_ui.pushButton_4.released.connect(partial(password_toggle, login_ui.lineEdit_2, login_ui.pushButton_4))
 kundalik_login_ui.lineEdit.returnPressed.connect(kundalik_login_ui.lineEdit_2.setFocus)
 kundalik_login_ui.lineEdit_2.returnPressed.connect(kundalik_login_func)
+kundalik_login_ui.pushButton_2.released.connect(partial(password_toggle, kundalik_login_ui.lineEdit_2, kundalik_login_ui.pushButton_2))
 ui.lineEdit_4.returnPressed.connect(get_data_serach)
 
 buy_dialog_ui.pushButton_2.clicked.connect(BuyDialogFrame.close)
@@ -1233,7 +1452,7 @@ if __name__ == "__main__":
                     msg = QtWidgets.QMessageBox(MainWindow)
                     msg.setIcon(QtWidgets.QMessageBox.Critical)
                     msg.setText("Ayni paytda eMaktab.uz sayti ishlamayapti, keyinroq qata urinib kuring. Saytda profilaktika ishlari olib borilayotgan bo'lishi ham mumkin")
-                    msg.setInformativeText("Keyinroq qayta kiring")
+                    msg.setInformativeText("Keyinroq qayta kiring 7")
                     msg.setWindowTitle("Xatolik!")
                     msg.show()
             except requests.exceptions.ConnectionError as e:
@@ -1245,8 +1464,8 @@ if __name__ == "__main__":
                 msg.setWindowTitle("Xatolik!")
                 msg.show()
             except Exception as e:
-                print(type(e))
-                print(e)
+                # print(type(e))
+                # print(e)
                 LoginFrame.show()
         else:
             KundalikLoginFrame.show()

@@ -324,9 +324,9 @@ font-size: 16px;
                 <widget class="QWidget" name="scrollAreaWidgetContents_2">
                  <property name="geometry">
                   <rect>
-                   <x>0</x>
+                   <x>-313</x>
                    <y>0</y>
-                   <width>965</width>
+                   <width>411</width>
                    <height>1589</height>
                   </rect>
                  </property>
@@ -2233,8 +2233,8 @@ border-color:  black;
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>768</width>
-                   <height>382</height>
+                   <width>962</width>
+                   <height>475</height>
                   </rect>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -2303,6 +2303,36 @@ QFrame:hover{
                         <property name="bottomMargin">
                          <number>0</number>
                         </property>
+                        <item>
+                         <widget class="QPushButton" name="pushButton_4">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Maximum" vsizetype="Minimum">
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                          <property name="cursor">
+                           <cursorShape>PointingHandCursor</cursorShape>
+                          </property>
+                          <property name="styleSheet">
+                           <string notr="true">QPushButton{
+border-radius: 5px;
+padding: 10px
+}
+QPushButton:pressed{
+	background-color: rgb(20, 100, 100);
+color: rgb(0,255,0);
+}</string>
+                          </property>
+                          <property name="text">
+                           <string/>
+                          </property>
+                          <property name="icon">
+                           <iconset>
+                            <normaloff>icons/refresh.png</normaloff>icons/refresh.png</iconset>
+                          </property>
+                         </widget>
+                        </item>
                         <item>
                          <widget class="QLabel" name="label_75">
                           <property name="styleSheet">

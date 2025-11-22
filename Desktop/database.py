@@ -5,17 +5,55 @@ from datetime import datetime, timedelta
 import kundalikcom_func
 
 
+import sqlite3
+
+class FileDatabase:
+    def __init__(self, db_name="files.db"):
+        """Bazaga ulanish va jadval yaratish"""
+        self.conn = sqlite3.connect(db_name)
+        self.cursor = self.conn.cursor()
+        self.create_table()
+
+    def create_table(self):
+        """Jadval yaratish (agar mavjud bo'lmasa)"""
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS files (
+                key TEXT PRIMARY KEY,
+                file_data BLOB NOT NULL
+            )
+        """)
+        self.conn.commit()
+
+    def save_file(self, key, file_bytes):
+        """Faylni `bytes` formatida SQL bazasiga saqlash yoki yangilash"""
+        self.cursor.execute("""
+            INSERT INTO files (key, file_data) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET file_data=excluded.file_data
+        """, (key, file_bytes))
+        self.conn.commit()
+
+    def load_file(self, key):
+        """Key orqali bazadan faylni `bytes` formatida o‘qish"""
+        self.cursor.execute("SELECT file_data FROM files WHERE key=?", (key,))
+        row = self.cursor.fetchone()
+        return row[0] if row else None  # `bytes` formatda qaytaradi
+
+from io import BytesIO
+
 class DatabaseConnect(object):
     """docstring for DatabaseConnect"""
     def __init__(self):
         super(DatabaseConnect, self).__init__()
         self.database_file_name = "database.db"
         self.browser = requests.session()
-        try:
-            with open(self.database_file_name, "rb") as f:
-                self.dict_data = pickle.load(f)
-                self.browser = pickle.load(f)
-        except:
+        self.fdb = FileDatabase()
+        # Pickle o'qish
+        file_bytes = self.fdb.load_file(self.database_file_name)
+        if file_bytes != None:
+            f = BytesIO(file_bytes)
+            self.dict_data = pickle.load(f)
+            self.browser = pickle.load(f)
+        else:
             self.dict_data = {
                 "logined": False,
                 "profile": dict(),
@@ -26,16 +64,38 @@ class DatabaseConnect(object):
             with open(self.database_file_name, "wb") as f:
                 pickle.dump(self.dict_data, f)
                 pickle.dump(self.browser, f)
-        self.dict_data["profile_kundalikcom"]["mal"] = {
-        "day_1": {"date": "2024.8.30", "foiz": 100},
-        "day_2": {"date": "2024.8.29", "foiz": 50},
-        "day_3": {"date": "2024.8.28", "foiz": 30},
-        "day_4": {"date": "2024.8.27", "foiz": 10},
-        }
-        self.day_1 = self.dict_data["profile_kundalikcom"]["mal"]["day_1"]
-        self.day_2 = self.dict_data["profile_kundalikcom"]["mal"]["day_2"]
-        self.day_3 = self.dict_data["profile_kundalikcom"]["mal"]["day_3"]
-        self.day_4 = self.dict_data["profile_kundalikcom"]["mal"]["day_4"]
+            d1 = datetime.now()
+            d2 = d1 - timedelta(days=1)
+            d3 = d1 - timedelta(days=2)
+            d4 = d1 - timedelta(days=3)
+            self.dict_data["profile_kundalikcom"]["mal"] = {
+                "day_1": {"date": d1.strftime("%Y.%m.%d"), "foiz": 0},
+                "day_2": {"date": d1.strftime("%Y.%m.%d"), "foiz": 0},
+                "day_3": {"date": d1.strftime("%Y.%m.%d"), "foiz": 0},
+                "day_4": {"date": d1.strftime("%Y.%m.%d"), "foiz": 0},
+            }
+            self.refresh()
+        try:
+            self.day_1 = self.dict_data["profile_kundalikcom"]["mal"]["day_1"]
+            self.day_2 = self.dict_data["profile_kundalikcom"]["mal"]["day_2"]
+            self.day_3 = self.dict_data["profile_kundalikcom"]["mal"]["day_3"]
+            self.day_4 = self.dict_data["profile_kundalikcom"]["mal"]["day_4"]
+        except:
+            
+            d1 = datetime.now()
+            d2 = d1 - timedelta(days=1)
+            d3 = d1 - timedelta(days=2)
+            d4 = d1 - timedelta(days=3)
+            self.dict_data["profile_kundalikcom"]["mal"] = {
+                "day_1": {"date": d1.strftime("%Y.%m.%d"), "foiz": 0},
+                "day_2": {"date": d2.strftime("%Y.%m.%d"), "foiz": 0},
+                "day_3": {"date": d3.strftime("%Y.%m.%d"), "foiz": 0},
+                "day_4": {"date": d4.strftime("%Y.%m.%d"), "foiz": 0},
+            }
+            self.day_1 = self.dict_data["profile_kundalikcom"]["mal"]["day_1"]
+            self.day_2 = self.dict_data["profile_kundalikcom"]["mal"]["day_2"]
+            self.day_3 = self.dict_data["profile_kundalikcom"]["mal"]["day_3"]
+            self.day_4 = self.dict_data["profile_kundalikcom"]["mal"]["day_4"]
     def login_kundalik(self, login, password):
         try:
             res = self.browser.get("https://emaktab.uz")
@@ -63,6 +123,7 @@ class DatabaseConnect(object):
             elif data == "Profilaktika":
                 return False, False
             elif data == "Internega ulanib bo'lmadi":
+                
                 return False, None
             else:
                 return False, True
@@ -73,9 +134,12 @@ class DatabaseConnect(object):
             return False, False
     # database fileni yangilash funksiyasi
     def refresh(self) -> None:
-        with open(self.database_file_name, "wb") as f:
-            pickle.dump(self.dict_data, f)
-            pickle.dump(self.browser, f)
+        f = BytesIO()
+        pickle.dump(self.dict_data, f)
+        pickle.dump(self.browser, f)
+        f.seek(0)
+        self.fdb.save_file(self.database_file_name, f.read())
+
     # login malumotlarini taxrirlash
     def login(self, token: str, data: dict) -> None:
         self.dict_data["profile"] = data
@@ -124,7 +188,7 @@ class DatabaseConnect(object):
                     "date": str(now).split()[0],
                     "foiz": -1
                 }
-                database.refresh()
+                self.refresh()
                 return self.dict_data["profile_kundalikcom"]["mal"]
         except:
             day_1 = datetime.now()
@@ -158,20 +222,18 @@ class DatabaseConnect(object):
             # print(user)
             res = user["browser"].get("https://emaktab.uz")
             soup = BeautifulSoup(res.content, "html.parser")
-            if "Chiqish" in soup.get_text():
-                # print("1 ta")
+            if "Chiqish" in soup.get_text() or "Выход" in soup.get_text():
+                self.dict_data["all_data_logins"][user_id]["end_date"] = datetime.now()
                 return True
             else:
                 how, data = kundalikcom_func.login_user(user["browser"], user["login"], user["parol"])
                 if how:
+                    self.dict_data["all_data_logins"][user_id]["end_date"] = datetime.now()
                     self.dict_data["all_data_logins"][user_id]["browser"] = data["browser"]
                     self.refresh()
                 return how
-
         except:
             return False
 # database = DatabaseConnect()
-# prof = database.get_kundalik_profile().copy()
-# import time
-# for i in range(1000):
-#     print(f"{i+1})",kundalikcom_func.login_user(prof["login"], prof["parol"]))
+# print(database.get_user("1000018278501"))
+# database.login_user("1000018278501")

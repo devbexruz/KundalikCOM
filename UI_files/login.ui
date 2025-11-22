@@ -218,7 +218,7 @@ color: cyan;
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_2">
+             <widget class="QPushButton" name="pushButton_4">
               <property name="cursor">
                <cursorShape>PointingHandCursor</cursorShape>
               </property>
@@ -228,16 +228,16 @@ border-radius: 10px;
 padding: 10px;
 font-size: 20px;
 color: black;
-	background-color: qlineargradient(spread:pad, x1:0, y1:0.227, x2:1, y2:0.739, stop:0 rgba(0, 255, 0, 255), stop:0.507389 rgba(0, 255, 255, 255), stop:1 rgba(0, 56, 255, 255));
+	background-color:rgb(191, 191, 191);
 border: 2px solid rgb(0,0,0,0);
 }
 QPushButton:hover{
 border-color:  black;
-	background-color: rgb(0, 255, 77);
+	background-color: rgb(77, 77, 77);
 }</string>
               </property>
               <property name="text">
-               <string>OK</string>
+               <string>ko'rsatish</string>
               </property>
              </widget>
             </item>
@@ -265,16 +265,64 @@ border-color:  black;
           </widget>
          </item>
          <item>
-          <widget class="QLineEdit" name="lineEdit_3">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
+          <widget class="QFrame" name="frame_4">
+           <property name="frameShape">
+            <enum>QFrame::StyledPanel</enum>
            </property>
-           <property name="echoMode">
-            <enum>QLineEdit::Normal</enum>
+           <property name="frameShadow">
+            <enum>QFrame::Raised</enum>
            </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLineEdit" name="lineEdit_3">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="echoMode">
+               <enum>QLineEdit::Normal</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_2">
+              <property name="cursor">
+               <cursorShape>PointingHandCursor</cursorShape>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">QPushButton{
+border-radius: 10px;
+padding: 10px;
+font-size: 20px;
+color: black;
+	background-color: qlineargradient(spread:pad, x1:0, y1:0.227, x2:1, y2:0.739, stop:0 rgba(0, 255, 0, 255), stop:0.507389 rgba(0, 255, 255, 255), stop:1 rgba(0, 56, 255, 255));
+border: 2px solid rgb(0,0,0,0);
+}
+QPushButton:hover{
+border-color:  black;
+	background-color: rgb(0, 255, 77);
+}</string>
+              </property>
+              <property name="text">
+               <string>Kodni olish</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </widget>
          </item>
          <item>
